@@ -1,0 +1,125 @@
+const Product = require("../models/Product");
+const { uploadFile, deleteFile } = require("../services/drive.service");
+
+exports.getAll = async (req, res) => {
+  const { category, search, page = 1, limit = 12, featured } = req.query;
+  const query = {};
+
+  if (category) query.category = category;
+  if (featured === "true") query.featured = true;
+  if (search) query.$text = { $search: search };
+
+  const skip = (Number(page) - 1) * Number(limit);
+  const [products, total] = await Promise.all([
+    Product.find(query).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),
+    Product.countDocuments(query),
+  ]);
+
+  res.json({
+    products,
+    total,
+    page: Number(page),
+    totalPages: Math.ceil(total / Number(limit)),
+  });
+};
+
+exports.getById = async (req, res) => {
+  const product = await Product.findById(req.params.id);
+  if (!product) return res.status(404).json({ message: "Produit introuvable" });
+  res.json(product);
+};
+
+exports.getCategories = async (req, res) => {
+  const categories = await Product.distinct("category");
+  res.json(categories);
+};
+
+exports.create = async (req, res) => {
+  const { title, description, category, price, inStock, featured } = req.body;
+
+  const images = [];
+
+  if (req.files && req.files.length > 0) {
+    for (const file of req.files) {
+      const result = await uploadFile(
+        file.buffer,
+        file.mimetype,
+        file.originalname,
+      );
+      if (result) images.push(result);
+    }
+  }
+
+  const product = await Product.create({
+    title,
+    description,
+    category,
+    price: Number(price),
+    images,
+    inStock: inStock !== "false",
+    featured: featured === "true",
+  });
+
+  res.status(201).json(product);
+};
+
+exports.update = async (req, res) => {
+  const product = await Product.findById(req.params.id);
+  if (!product) return res.status(404).json({ message: "Produit introuvable" });
+
+  const {
+    title,
+    description,
+    category,
+    price,
+    inStock,
+    featured,
+    deletedImages,
+  } = req.body;
+
+  // Delete removed images from Drive
+  if (deletedImages) {
+    const toDelete = JSON.parse(deletedImages);
+    for (const fileId of toDelete) {
+      await deleteFile(fileId);
+    }
+    product.images = product.images.filter(
+      (img) => !toDelete.includes(img.fileId),
+    );
+  }
+
+  // Upload new images
+  if (req.files && req.files.length > 0) {
+    for (const file of req.files) {
+      const result = await uploadFile(
+        file.buffer,
+        file.mimetype,
+        file.originalname,
+      );
+      product.images.push(result);
+    }
+  }
+
+  if (title !== undefined) product.title = title;
+  if (description !== undefined) product.description = description;
+  if (category !== undefined) product.category = category;
+  if (price !== undefined) product.price = Number(price);
+  if (inStock !== undefined) product.inStock = inStock !== "false";
+  if (featured !== undefined) product.featured = featured === "true";
+
+  await product.save();
+  res.json(product);
+};
+
+exports.delete = async (req, res) => {
+  const product = await Product.findById(req.params.id);
+  if (!product) return res.status(404).json({ message: "Produit introuvable" });
+
+  // Delete all images from Drive
+  for (const img of product.images) {
+    if (img.fileId) await deleteFile(img.fileId);
+  }
+
+  await product.deleteOne();
+  res.json({ message: "Produit supprimé" });
+};

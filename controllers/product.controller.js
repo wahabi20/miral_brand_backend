@@ -35,7 +35,7 @@ exports.getCategories = async (req, res) => {
 };
 
 exports.create = async (req, res) => {
-  const { title, description, category, price, inStock, featured } = req.body;
+  const { title, description, category, price, inStock, featured, isPromo, promoPrice } = req.body;
 
   const images = [];
 
@@ -58,6 +58,8 @@ exports.create = async (req, res) => {
     images,
     inStock: inStock !== "false",
     featured: featured === "true",
+    isPromo: isPromo === "true",
+    promoPrice: promoPrice ? Number(promoPrice) : null,
   });
 
   res.status(201).json(product);
@@ -74,6 +76,8 @@ exports.update = async (req, res) => {
     price,
     inStock,
     featured,
+    isPromo,
+    promoPrice,
     deletedImages,
   } = req.body;
 
@@ -106,6 +110,8 @@ exports.update = async (req, res) => {
   if (price !== undefined) product.price = Number(price);
   if (inStock !== undefined) product.inStock = inStock !== "false";
   if (featured !== undefined) product.featured = featured === "true";
+  if (isPromo !== undefined) product.isPromo = isPromo === "true";
+  if (promoPrice !== undefined) product.promoPrice = promoPrice ? Number(promoPrice) : null;
 
   await product.save();
   res.json(product);

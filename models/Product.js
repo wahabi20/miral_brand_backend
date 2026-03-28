@@ -35,6 +35,15 @@ const productSchema = new mongoose.Schema({
   featured: {
     type: Boolean,
     default: false
+  },
+  isPromo: {
+    type: Boolean,
+    default: false
+  },
+  promoPrice: {
+    type: Number,
+    min: [0, 'Le prix promo doit être positif'],
+    default: null
   }
 }, { timestamps: true });
 

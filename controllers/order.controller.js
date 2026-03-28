@@ -37,6 +37,48 @@ exports.create = async (req, res) => {
   res.status(201).json(order);
 };
 
+exports.getStats = async (req, res) => {
+  const year = parseInt(req.query.year) || new Date().getFullYear();
+  const start = new Date(year, 0, 1);
+  const end   = new Date(year + 1, 0, 1);
+
+  const monthly = await Order.aggregate([
+    { $match: { createdAt: { $gte: start, $lt: end } } },
+    {
+      $group: {
+        _id:     { $month: '$createdAt' },
+        count:   { $sum: 1 },
+        revenue: { $sum: '$totalPrice' }
+      }
+    },
+    { $sort: { _id: 1 } }
+  ]);
+
+  // Fill all 12 months
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const found = monthly.find(m => m._id === i + 1);
+    return { month: i + 1, count: found?.count || 0, revenue: found?.revenue || 0 };
+  });
+
+  // Status breakdown for the year
+  const statusBreakdown = await Order.aggregate([
+    { $match: { createdAt: { $gte: start, $lt: end } } },
+    { $group: { _id: '$status', count: { $sum: 1 } } }
+  ]);
+
+  // Available years
+  const years = await Order.aggregate([
+    { $group: { _id: { $year: '$createdAt' } } },
+    { $sort: { _id: -1 } }
+  ]);
+
+  res.json({
+    months,
+    statusBreakdown,
+    years: years.map(y => y._id)
+  });
+};
+
 exports.getAll = async (req, res) => {
   const { status, page = 1, limit = 20 } = req.query;
   const query = status ? { status } : {};

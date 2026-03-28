@@ -9,12 +9,15 @@ exports.create = async (req, res) => {
   if (!product) return res.status(404).json({ message: 'Produit introuvable' });
 
   const qty = Number(quantity);
-  const totalPrice = product.price * qty;
+  const unitPrice = (product.isPromo && product.promoPrice) ? product.promoPrice : product.price;
+  const totalPrice = unitPrice * qty;
 
   const order = await Order.create({
     product: product._id,
     productTitle: product.title,
-    productPrice: product.price,
+    productPrice: unitPrice,
+    productOriginalPrice: product.price,
+    isPromo: product.isPromo && !!product.promoPrice,
     productCategory: product.category,
     productImages: product.images.map(img => img.url),
     firstName,

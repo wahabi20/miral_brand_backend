@@ -1,4 +1,5 @@
 const Product = require("../models/Product");
+const Category = require("../models/Category");
 const { uploadFile, deleteFile } = require("../services/drive.service");
 
 exports.getAll = async (req, res) => {
@@ -37,17 +38,25 @@ exports.getCategories = async (req, res) => {
 exports.create = async (req, res) => {
   const { title, description, category, price, inStock, featured, isPromo, promoPrice } = req.body;
 
+  // Upload product images
   const images = [];
+  const imageFiles = req.files?.['images'] || [];
+  for (const file of imageFiles) {
+    const result = await uploadFile(file.buffer, file.mimetype, file.originalname);
+    if (result) images.push(result);
+  }
 
-  if (req.files && req.files.length > 0) {
-    for (const file of req.files) {
-      const result = await uploadFile(
-        file.buffer,
-        file.mimetype,
-        file.originalname,
-      );
-      if (result) images.push(result);
-    }
+  // Auto-create or update category with image if provided
+  const catImageFiles = req.files?.['categoryImage'] || [];
+  if (catImageFiles.length > 0) {
+    const catImg = await uploadFile(catImageFiles[0].buffer, catImageFiles[0].mimetype, catImageFiles[0].originalname);
+    const existing = await Category.findOne({ name: category });
+    if (existing) { if (catImg) { existing.image = catImg; await existing.save(); } }
+    else { await Category.create({ name: category, image: catImg }); }
+  } else {
+    // Ensure category exists (without image)
+    const exists = await Category.findOne({ name: category });
+    if (!exists) await Category.create({ name: category });
   }
 
   const product = await Product.create({
@@ -93,15 +102,10 @@ exports.update = async (req, res) => {
   }
 
   // Upload new images
-  if (req.files && req.files.length > 0) {
-    for (const file of req.files) {
-      const result = await uploadFile(
-        file.buffer,
-        file.mimetype,
-        file.originalname,
-      );
-      product.images.push(result);
-    }
+  const newImageFiles = req.files?.['images'] || [];
+  for (const file of newImageFiles) {
+    const result = await uploadFile(file.buffer, file.mimetype, file.originalname);
+    if (result) product.images.push(result);
   }
 
   if (title !== undefined) product.title = title;

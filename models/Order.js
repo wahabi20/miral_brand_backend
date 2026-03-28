@@ -8,6 +8,8 @@ const orderSchema = new mongoose.Schema({
   },
   productTitle: String,
   productPrice: Number,
+  productOriginalPrice: Number,
+  isPromo: { type: Boolean, default: false },
   productCategory: String,
   productImages: [String],
   firstName: {

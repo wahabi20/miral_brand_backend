@@ -48,7 +48,7 @@ exports.getStats = async (req, res) => {
   const FIXED_COSTS_PER_ORDER = 10.575;
 
   const monthly = await Order.aggregate([
-    { $match: { createdAt: { $gte: start, $lt: end } } },
+    { $match: { createdAt: { $gte: start, $lt: end }, deletedAt: null } },
     {
       $group: {
         _id:        { $month: '$createdAt' },
@@ -78,7 +78,7 @@ exports.getStats = async (req, res) => {
 
   // Total net benefit for the year
   const netBenefitAgg = await Order.aggregate([
-    { $match: { createdAt: { $gte: start, $lt: end } } },
+    { $match: { createdAt: { $gte: start, $lt: end }, deletedAt: null } },
     {
       $group: {
         _id: null,
@@ -100,7 +100,7 @@ exports.getStats = async (req, res) => {
 
   // Status breakdown for the year
   const statusBreakdown = await Order.aggregate([
-    { $match: { createdAt: { $gte: start, $lt: end } } },
+    { $match: { createdAt: { $gte: start, $lt: end }, deletedAt: null } },
     { $group: { _id: '$status', count: { $sum: 1 } } }
   ]);
 
@@ -119,8 +119,10 @@ exports.getStats = async (req, res) => {
 };
 
 exports.getAll = async (req, res) => {
-  const { status, page = 1, limit = 20 } = req.query;
-  const query = status ? { status } : {};
+  const { status, page = 1, limit = 20, showDeleted } = req.query;
+  const query = { deletedAt: null };
+  if (status) query.status = status;
+  if (showDeleted === 'true') delete query.deletedAt; // admin can view all
   const skip = (Number(page) - 1) * Number(limit);
 
   const [orders, total] = await Promise.all([
@@ -140,4 +142,44 @@ exports.updateStatus = async (req, res) => {
   );
   if (!order) return res.status(404).json({ message: 'Commande introuvable' });
   res.json(order);
+};
+
+exports.update = async (req, res) => {
+  const { firstName, lastName, address, phone, quantity, notes, status } = req.body;
+  const order = await Order.findById(req.params.id);
+  if (!order) return res.status(404).json({ message: 'Commande introuvable' });
+
+  if (firstName  !== undefined) order.firstName  = firstName;
+  if (lastName   !== undefined) order.lastName   = lastName;
+  if (address    !== undefined) order.address    = address;
+  if (phone      !== undefined) order.phone      = phone;
+  if (notes      !== undefined) order.notes      = notes;
+  if (status     !== undefined) order.status     = status;
+  if (quantity   !== undefined) {
+    order.quantity   = Number(quantity);
+    order.totalPrice = order.productPrice * order.quantity;
+  }
+
+  await order.save();
+  res.json(order);
+};
+
+exports.softDelete = async (req, res) => {
+  const order = await Order.findByIdAndUpdate(
+    req.params.id,
+    { deletedAt: new Date() },
+    { new: true }
+  );
+  if (!order) return res.status(404).json({ message: 'Commande introuvable' });
+  res.json({ message: 'Commande supprimée', order });
+};
+
+exports.restore = async (req, res) => {
+  const order = await Order.findByIdAndUpdate(
+    req.params.id,
+    { deletedAt: null },
+    { new: true }
+  );
+  if (!order) return res.status(404).json({ message: 'Commande introuvable' });
+  res.json({ message: 'Commande restaurée', order });
 };

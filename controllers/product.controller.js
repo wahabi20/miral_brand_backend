@@ -101,6 +101,14 @@ exports.update = async (req, res) => {
     );
   }
 
+  // Reorder existing images if imageOrder provided
+  if (req.body.imageOrder) {
+    const order = JSON.parse(req.body.imageOrder);
+    product.images = order
+      .map(id => product.images.find(img => img.fileId === id))
+      .filter(Boolean);
+  }
+
   // Upload new images
   const newImageFiles = req.files?.['images'] || [];
   for (const file of newImageFiles) {

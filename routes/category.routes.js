@@ -5,6 +5,7 @@ const upload = require('../middleware/upload.middleware');
 
 router.get('/', ctrl.getAll);
 router.post('/', auth, upload.single('categoryImage'), ctrl.create);
+router.put('/:id', auth, upload.single('categoryImage'), ctrl.update);
 router.delete('/:id', auth, ctrl.delete);
 
 module.exports = router;

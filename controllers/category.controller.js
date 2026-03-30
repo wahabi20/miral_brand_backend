@@ -26,6 +26,21 @@ exports.create = async (req, res) => {
   res.status(201).json(category);
 };
 
+exports.update = async (req, res) => {
+  const cat = await Category.findById(req.params.id);
+  if (!cat) return res.status(404).json({ message: 'Catégorie introuvable' });
+
+  if (req.body.name) cat.name = req.body.name.trim();
+
+  if (req.file) {
+    if (cat.image?.fileId) await deleteFile(cat.image.fileId);
+    cat.image = await uploadFile(req.file.buffer, req.file.mimetype, req.file.originalname);
+  }
+
+  await cat.save();
+  res.json(cat);
+};
+
 exports.delete = async (req, res) => {
   const cat = await Category.findById(req.params.id);
   if (!cat) return res.status(404).json({ message: 'Catégorie introuvable' });

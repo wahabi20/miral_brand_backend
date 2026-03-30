@@ -44,6 +44,11 @@ const productSchema = new mongoose.Schema({
     type: Number,
     min: [0, 'Le prix promo doit être positif'],
     default: null
+  },
+  cost: {
+    type: Number,
+    min: [0, 'Le coût doit être positif'],
+    default: 0
   }
 }, { timestamps: true });
 

@@ -36,7 +36,7 @@ exports.getCategories = async (req, res) => {
 };
 
 exports.create = async (req, res) => {
-  const { title, description, category, price, inStock, featured, isPromo, promoPrice } = req.body;
+  const { title, description, category, price, cost, inStock, featured, isPromo, promoPrice } = req.body;
 
   // Upload product images
   const images = [];
@@ -64,6 +64,7 @@ exports.create = async (req, res) => {
     description,
     category,
     price: Number(price),
+    cost: cost ? Number(cost) : 0,
     images,
     inStock: inStock !== "false",
     featured: featured === "true",
@@ -83,6 +84,7 @@ exports.update = async (req, res) => {
     description,
     category,
     price,
+    cost,
     inStock,
     featured,
     isPromo,
@@ -120,6 +122,7 @@ exports.update = async (req, res) => {
   if (description !== undefined) product.description = description;
   if (category !== undefined) product.category = category;
   if (price !== undefined) product.price = Number(price);
+  if (cost !== undefined) product.cost = cost ? Number(cost) : 0;
   if (inStock !== undefined) product.inStock = inStock !== "false";
   if (featured !== undefined) product.featured = featured === "true";
   if (isPromo !== undefined) product.isPromo = isPromo === "true";

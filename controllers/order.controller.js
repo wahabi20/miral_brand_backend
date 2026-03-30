@@ -17,6 +17,7 @@ exports.create = async (req, res) => {
     productTitle: product.title,
     productPrice: unitPrice,
     productOriginalPrice: product.price,
+    productCost: product.cost || 0,
     isPromo: product.isPromo && !!product.promoPrice,
     productCategory: product.category,
     productImages: product.images.map(img => img.url),
@@ -42,13 +43,28 @@ exports.getStats = async (req, res) => {
   const start = new Date(year, 0, 1);
   const end   = new Date(year + 1, 0, 1);
 
+  // totalPrice already includes the 7 TND client shipping — do NOT add it again
+  // Fixed costs: 7 (shipping) + 0.900 (handling) + 2.115 (dropshipping) + 0.560 (packaging) = 10.575
+  const FIXED_COSTS_PER_ORDER = 10.575;
+
   const monthly = await Order.aggregate([
     { $match: { createdAt: { $gte: start, $lt: end } } },
     {
       $group: {
-        _id:     { $month: '$createdAt' },
-        count:   { $sum: 1 },
-        revenue: { $sum: '$totalPrice' }
+        _id:        { $month: '$createdAt' },
+        count:      { $sum: 1 },
+        revenue:    { $sum: '$totalPrice' },
+        netBenefit: {
+          $sum: {
+            $subtract: [
+              '$totalPrice',
+              { $add: [
+                { $multiply: [{ $ifNull: ['$productCost', 0] }, '$quantity'] },
+                FIXED_COSTS_PER_ORDER
+              ]}
+            ]
+          }
+        }
       }
     },
     { $sort: { _id: 1 } }
@@ -57,8 +73,30 @@ exports.getStats = async (req, res) => {
   // Fill all 12 months
   const months = Array.from({ length: 12 }, (_, i) => {
     const found = monthly.find(m => m._id === i + 1);
-    return { month: i + 1, count: found?.count || 0, revenue: found?.revenue || 0 };
+    return { month: i + 1, count: found?.count || 0, revenue: found?.revenue || 0, netBenefit: found?.netBenefit || 0 };
   });
+
+  // Total net benefit for the year
+  const netBenefitAgg = await Order.aggregate([
+    { $match: { createdAt: { $gte: start, $lt: end } } },
+    {
+      $group: {
+        _id: null,
+        total: {
+          $sum: {
+            $subtract: [
+              '$totalPrice',
+              { $add: [
+                { $multiply: [{ $ifNull: ['$productCost', 0] }, '$quantity'] },
+                FIXED_COSTS_PER_ORDER
+              ]}
+            ]
+          }
+        }
+      }
+    }
+  ]);
+  const totalNetBenefit = netBenefitAgg[0]?.total || 0;
 
   // Status breakdown for the year
   const statusBreakdown = await Order.aggregate([
@@ -74,6 +112,7 @@ exports.getStats = async (req, res) => {
 
   res.json({
     months,
+    totalNetBenefit,
     statusBreakdown,
     years: years.map(y => y._id)
   });

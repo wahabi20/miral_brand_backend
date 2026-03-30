@@ -9,6 +9,7 @@ const orderSchema = new mongoose.Schema({
   productTitle: String,
   productPrice: Number,
   productOriginalPrice: Number,
+  productCost: { type: Number, default: 0 },
   isPromo: { type: Boolean, default: false },
   productCategory: String,
   productImages: [String],

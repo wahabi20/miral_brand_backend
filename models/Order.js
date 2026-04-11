@@ -31,6 +31,10 @@ const orderSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Le numéro de téléphone est requis']
   },
+  email: {
+    type: String,
+    default: null
+  },
   quantity: {
     type: Number,
     required: true,

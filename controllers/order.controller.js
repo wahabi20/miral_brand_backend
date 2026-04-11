@@ -1,12 +1,13 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
-const { sendOrderNotification } = require('../services/mail.service');
+const { sendOrderNotification, sendOrderConfirmationToClient } = require('../services/mail.service');
 
 exports.create = async (req, res) => {
-  const { productId, firstName, lastName, address, phone, quantity, notes } = req.body;
+  const { productId, firstName, lastName, address, phone, email, quantity, notes } = req.body;
 
   const product = await Product.findById(productId);
   if (!product) return res.status(404).json({ message: 'Produit introuvable' });
+  if (!product.inStock) return res.status(400).json({ message: 'Ce produit est en rupture de stock' });
 
   const qty = Number(quantity);
   const unitPrice = (product.isPromo && product.promoPrice) ? product.promoPrice : product.price;
@@ -25,15 +26,23 @@ exports.create = async (req, res) => {
     lastName,
     address,
     phone,
+    email: email || null,
     quantity: qty,
     totalPrice,
     notes
   });
 
-  // Send email notification (non-blocking)
+  // Send admin notification (non-blocking)
   sendOrderNotification(order).catch(err => {
-    console.error('Email error:', err.message);
+    console.error('Admin email error:', err.message);
   });
+
+  // Send confirmation to client if email provided (non-blocking)
+  if (order.email) {
+    sendOrderConfirmationToClient(order).catch(err => {
+      console.error('Client email error:', err.message);
+    });
+  }
 
   res.status(201).json(order);
 };

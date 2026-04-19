@@ -9,7 +9,7 @@ const app = express();
 connectDB();
 
 // Middleware
-const allowedOrigins = [process.env.FRONTEND_URL, "http://localhost:4200"];
+const allowedOrigins = [process.env.FRONTEND_URL, "http://localhost:4300"];
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -32,7 +32,8 @@ app.use("/api/orders", require("./routes/order.routes"));
 app.use("/api/categories", require("./routes/category.routes"));
 app.use("/api/drive", require("./routes/drive.routes"));
 app.use("/api/covers", require("./routes/cover.routes"));
-app.use("/api/contact", require("./routes/contact.routes"));
+app.use("/api/contact",   require("./routes/contact.routes"));
+app.use("/api/analytics", require("./routes/analytics.routes"));
 
 // Health check
 app.get("/api/health", (req, res) => {

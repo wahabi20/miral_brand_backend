@@ -3,12 +3,20 @@ const Category = require("../models/Category");
 const { uploadFile, deleteFile } = require("../services/drive.service");
 
 exports.getAll = async (req, res) => {
-  const { category, search, page = 1, limit = 12, featured } = req.query;
+  const { category, search, title, page = 1, limit = 12, featured, inStock, minPrice, maxPrice } = req.query;
   const query = {};
 
   if (category) query.category = category;
   if (featured === "true") query.featured = true;
+  if (inStock === "true") query.inStock = true;
+  if (inStock === "false") query.inStock = false;
+  if (title) query.title = { $regex: title, $options: "i" };
   if (search) query.$text = { $search: search };
+  if (minPrice || maxPrice) {
+    query.price = {};
+    if (minPrice) query.price.$gte = Number(minPrice);
+    if (maxPrice) query.price.$lte = Number(maxPrice);
+  }
 
   const skip = (Number(page) - 1) * Number(limit);
   const [products, total] = await Promise.all([

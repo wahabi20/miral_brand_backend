@@ -52,58 +52,39 @@ exports.getStats = async (req, res) => {
   const start = new Date(year, 0, 1);
   const end   = new Date(year + 1, 0, 1);
 
-  // totalPrice already includes the 7 TND client shipping — do NOT add it again
-  // Fixed costs: 7 (shipping) + 0.900 (handling) + 2.115 (dropshipping) + 0.560 (packaging) = 10.575
-  const FIXED_COSTS_PER_ORDER = 10.575;
+  const FIXED = 10.575;
+
+  const calcNetBenefit = {
+    $ifNull: [
+      '$netBenefitOverride',
+      { $subtract: [
+          '$totalPrice',
+          { $add: [{ $multiply: [{ $ifNull: ['$productCost', 0] }, '$quantity'] }, FIXED] }
+      ]}
+    ]
+  };
 
   const monthly = await Order.aggregate([
-    { $match: { createdAt: { $gte: start, $lt: end }, deletedAt: null } },
+    { $match: { createdAt: { $gte: start, $lt: end }, deletedAt: null, status: { $ne: 'returned' } } },
     {
       $group: {
         _id:        { $month: '$createdAt' },
         count:      { $sum: 1 },
         revenue:    { $sum: '$totalPrice' },
-        netBenefit: {
-          $sum: {
-            $subtract: [
-              '$totalPrice',
-              { $add: [
-                { $multiply: [{ $ifNull: ['$productCost', 0] }, '$quantity'] },
-                FIXED_COSTS_PER_ORDER
-              ]}
-            ]
-          }
-        }
+        netBenefit: { $sum: calcNetBenefit }
       }
     },
     { $sort: { _id: 1 } }
   ]);
 
-  // Fill all 12 months
   const months = Array.from({ length: 12 }, (_, i) => {
     const found = monthly.find(m => m._id === i + 1);
     return { month: i + 1, count: found?.count || 0, revenue: found?.revenue || 0, netBenefit: found?.netBenefit || 0 };
   });
 
-  // Total net benefit for the year
   const netBenefitAgg = await Order.aggregate([
-    { $match: { createdAt: { $gte: start, $lt: end }, deletedAt: null } },
-    {
-      $group: {
-        _id: null,
-        total: {
-          $sum: {
-            $subtract: [
-              '$totalPrice',
-              { $add: [
-                { $multiply: [{ $ifNull: ['$productCost', 0] }, '$quantity'] },
-                FIXED_COSTS_PER_ORDER
-              ]}
-            ]
-          }
-        }
-      }
-    }
+    { $match: { createdAt: { $gte: start, $lt: end }, deletedAt: null, status: { $ne: 'returned' } } },
+    { $group: { _id: null, total: { $sum: calcNetBenefit } } }
   ]);
   const totalNetBenefit = netBenefitAgg[0]?.total || 0;
 
@@ -128,12 +109,36 @@ exports.getStats = async (req, res) => {
 };
 
 exports.getAll = async (req, res) => {
-  const { status, page = 1, limit = 20, showDeleted } = req.query;
-  const query = { deletedAt: null };
-  if (status) query.status = status;
-  if (showDeleted === 'true') delete query.deletedAt; // admin can view all
-  const skip = (Number(page) - 1) * Number(limit);
+  const { status, page = 1, limit = 20, showDeleted,
+          productTitle, clientName, phone,
+          minPrice, maxPrice, dateFrom, dateTo } = req.query;
 
+  const query = { deletedAt: null };
+  if (showDeleted === 'true') delete query.deletedAt;
+  if (status)       query.status = status;
+  if (productTitle) query.productTitle = { $regex: productTitle, $options: 'i' };
+  if (phone)        query.phone = { $regex: phone, $options: 'i' };
+  if (clientName) {
+    const words = clientName.trim().split(/\s+/);
+    query.$and = words.map(word => ({
+      $or: [
+        { firstName: { $regex: word, $options: 'i' } },
+        { lastName:  { $regex: word, $options: 'i' } }
+      ]
+    }));
+  }
+  if (minPrice || maxPrice) {
+    query.totalPrice = {};
+    if (minPrice) query.totalPrice.$gte = Number(minPrice);
+    if (maxPrice) query.totalPrice.$lte = Number(maxPrice);
+  }
+  if (dateFrom || dateTo) {
+    query.createdAt = {};
+    if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
+    if (dateTo)   query.createdAt.$lte = new Date(new Date(dateTo).setHours(23, 59, 59, 999));
+  }
+
+  const skip = (Number(page) - 1) * Number(limit);
   const [orders, total] = await Promise.all([
     Order.find(query).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),
     Order.countDocuments(query)
@@ -154,17 +159,18 @@ exports.updateStatus = async (req, res) => {
 };
 
 exports.update = async (req, res) => {
-  const { firstName, lastName, address, phone, quantity, notes, status } = req.body;
+  const { firstName, lastName, address, phone, quantity, notes, status, netBenefitOverride } = req.body;
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: 'Commande introuvable' });
 
-  if (firstName  !== undefined) order.firstName  = firstName;
-  if (lastName   !== undefined) order.lastName   = lastName;
-  if (address    !== undefined) order.address    = address;
-  if (phone      !== undefined) order.phone      = phone;
-  if (notes      !== undefined) order.notes      = notes;
-  if (status     !== undefined) order.status     = status;
-  if (quantity   !== undefined) {
+  if (firstName          !== undefined) order.firstName          = firstName;
+  if (lastName           !== undefined) order.lastName           = lastName;
+  if (address            !== undefined) order.address            = address;
+  if (phone              !== undefined) order.phone              = phone;
+  if (notes              !== undefined) order.notes              = notes;
+  if (status             !== undefined) order.status             = status;
+  if (netBenefitOverride !== undefined) order.netBenefitOverride = netBenefitOverride ?? null;
+  if (quantity           !== undefined) {
     order.quantity   = Number(quantity);
     order.totalPrice = order.productPrice * order.quantity;
   }

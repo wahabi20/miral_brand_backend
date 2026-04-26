@@ -3,7 +3,7 @@ const Category = require("../models/Category");
 const { uploadFile, deleteFile } = require("../services/drive.service");
 
 exports.getAll = async (req, res) => {
-  const { category, search, title, page = 1, limit = 12, featured, inStock, minPrice, maxPrice } = req.query;
+  const { category, search, title, page = 1, limit = 12, featured, inStock, minPrice, maxPrice, dateFrom, dateTo } = req.query;
   const query = {};
 
   if (category) query.category = category;
@@ -16,6 +16,11 @@ exports.getAll = async (req, res) => {
     query.price = {};
     if (minPrice) query.price.$gte = Number(minPrice);
     if (maxPrice) query.price.$lte = Number(maxPrice);
+  }
+  if (dateFrom || dateTo) {
+    query.createdAt = {};
+    if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
+    if (dateTo)   query.createdAt.$lte = new Date(new Date(dateTo).setHours(23, 59, 59, 999));
   }
 
   const skip = (Number(page) - 1) * Number(limit);

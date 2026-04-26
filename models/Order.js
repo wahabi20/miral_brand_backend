@@ -46,10 +46,11 @@ const orderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'shipped', 'cancelled'],
+    enum: ['pending', 'confirmed', 'shipped', 'cancelled', 'returned'],
     default: 'pending'
   },
   notes: String,
+  netBenefitOverride: { type: Number, default: null },
   deletedAt: { type: Date, default: null }
 }, { timestamps: true });
 
